@@ -1,6 +1,7 @@
 name: Build Astrophilux Nebula VST3
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:
