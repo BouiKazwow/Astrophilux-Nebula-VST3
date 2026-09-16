@@ -1,0 +1,48 @@
+name: Build Astrophilux Nebula VST3
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Install CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target AstrophiluxNebula_VST3
+
+      - name: Package Windows VST3
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3" -DestinationPath Astrophilux_Nebula_Windows_VST3.zip
+          choco install innosetup -y
+          & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" Installer/windows.iss
+
+      - name: Package Mac VST3
+        if: runner.os == 'macOS'
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3" Astrophilux_Nebula_macOS_VST3.zip
+          pkgbuild --component "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3" --install-location "/Library/Audio/Plug-Ins/VST3" --identifier "com.astrophilux.nebula.vst3" --version "0.3.0" Astrophilux_Nebula_macOS.pkg
+
+      - name: Upload finished files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Astrophilux-Nebula-${{ runner.os }}
+          path: |
+            Astrophilux_Nebula_*_VST3.zip
+            dist/*.exe
+            Astrophilux_Nebula_macOS.pkg
