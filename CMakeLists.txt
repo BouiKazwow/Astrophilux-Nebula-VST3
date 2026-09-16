@@ -33,6 +33,8 @@ juce_add_plugin(AstrophiluxNebula
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 
+juce_generate_juce_header(AstrophiluxNebula)
+
 juce_add_binary_data(NebulaAssets
     NAMESPACE BinaryData
     SOURCES
