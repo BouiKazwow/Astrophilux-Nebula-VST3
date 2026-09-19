@@ -1,80 +1,17 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-
-namespace IDs { constexpr auto attack="attack"; constexpr auto decay="decay"; constexpr auto sustain="sustain"; constexpr auto release="release"; constexpr auto tone="tone"; constexpr auto drift="drift"; constexpr auto echo="echo"; constexpr auto space="space"; constexpr auto master="master"; }
-
-AstrophiluxNebulaAudioProcessor::AstrophiluxNebulaAudioProcessor():AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,nullptr,"NEBULA_STATE",createLayout())
-{
-    for(int i=0;i<16;++i) synth.addVoice(new NebulaSamplerVoice());
-    juce::WavAudioFormat wav;
-    auto* stream=new juce::MemoryInputStream(BinaryData::Nebula_Source_C3_wav,BinaryData::Nebula_Source_C3_wavSize,false);
-    if(auto reader=std::unique_ptr<juce::AudioFormatReader>(wav.createReaderFor(stream,true))){
-        juce::BigInteger range; range.setRange(0,128,true);
-        synth.addSound(new NebulaSamplerSound("Astrophilux Source",*reader,range,60,0.02,1.8,8.0));
-    }
-}
-juce::AudioProcessorValueTreeState::ParameterLayout AstrophiluxNebulaAudioProcessor::createLayout()
-{
-    using P=juce::AudioParameterFloat; std::vector<std::unique_ptr<juce::RangedAudioParameter>> p;
-    p.push_back(std::make_unique<P>(IDs::attack,"Attack",juce::NormalisableRange<float>(.001f,4.f,.001f,.35f),.02f));
-    p.push_back(std::make_unique<P>(IDs::decay,"Decay",juce::NormalisableRange<float>(.01f,8.f,.001f,.35f),1.1f));
-    p.push_back(std::make_unique<P>(IDs::sustain,"Sustain",0.f,1.f,.82f));
-    p.push_back(std::make_unique<P>(IDs::release,"Release",juce::NormalisableRange<float>(.02f,12.f,.001f,.35f),1.8f));
-    p.push_back(std::make_unique<P>(IDs::tone,"Tone",juce::NormalisableRange<float>(80.f,20000.f,1.f,.25f),9000.f));
-    p.push_back(std::make_unique<P>(IDs::drift,"Drift",0.f,1.f,.18f));
-    p.push_back(std::make_unique<P>(IDs::echo,"Echo",0.f,1.f,.12f));
-    p.push_back(std::make_unique<P>(IDs::space,"Space",0.f,1.f,.24f));
-    p.push_back(std::make_unique<P>(IDs::master,"Master",0.f,1.25f,.8f));
-    return {p.begin(),p.end()};
-}
-bool AstrophiluxNebulaAudioProcessor::isBusesLayoutSupported(const BusesLayout& l) const { return l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo(); }
-void AstrophiluxNebulaAudioProcessor::prepareToPlay(double sr,int block)
-{
-    sampleRate=sr; synth.setCurrentPlaybackSampleRate(sr); keyboardState.reset();
-    juce::dsp::ProcessSpec spec{sr,(juce::uint32)block,2}; filter.prepare(spec); filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass); chorus.prepare(spec); reverb.prepare(spec); delay.prepare(spec);
-    chorus.setRate(.18f); chorus.setDepth(.22f); chorus.setCentreDelay(7.f); chorus.setFeedback(.08f);
-}
-void AstrophiluxNebulaAudioProcessor::updateEnvelope()
-{
-    juce::ADSR::Parameters p; p.attack=*state.getRawParameterValue(IDs::attack);p.decay=*state.getRawParameterValue(IDs::decay);p.sustain=*state.getRawParameterValue(IDs::sustain);p.release=*state.getRawParameterValue(IDs::release);
-    for(int i=0;i<synth.getNumVoices();++i) if(auto* v=dynamic_cast<NebulaSamplerVoice*>(synth.getVoice(i))) v->setEnvelopeParameters(p);
-}
-void AstrophiluxNebulaAudioProcessor::processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer& midi)
-{
-    juce::ScopedNoDenormals n; b.clear(); updateEnvelope(); keyboardState.processNextMidiBuffer(midi,0,b.getNumSamples(),true); synth.renderNextBlock(b,midi,0,b.getNumSamples());
-    juce::dsp::AudioBlock<float> block(b); juce::dsp::ProcessContextReplacing<float> ctx(block);
-    filter.setCutoffFrequency(*state.getRawParameterValue(IDs::tone)); filter.process(ctx);
-    chorus.setMix(*state.getRawParameterValue(IDs::drift)); chorus.process(ctx);
-    float ea=*state.getRawParameterValue(IDs::echo), ds=(float)(sampleRate*.375);
-    for(int s=0;s<b.getNumSamples();++s) for(int ch=0;ch<b.getNumChannels();++ch){float dry=b.getSample(ch,s),d=delay.popSample(ch,ds);delay.pushSample(ch,dry+d*.28f);b.setSample(ch,s,dry+d*ea);}
-    juce::dsp::Reverb::Parameters rp; rp.roomSize=.72f;rp.damping=.58f;rp.wetLevel=*state.getRawParameterValue(IDs::space);rp.dryLevel=1.f-rp.wetLevel*.35f;reverb.setParameters(rp);reverb.process(ctx);
-    b.applyGain(*state.getRawParameterValue(IDs::master));
-}
-const juce::String AstrophiluxNebulaAudioProcessor::getProgramName(int i)
-{
-    static const char* names[]={"Synth Pad 3","Infinite Haze","Soft Orbit","Dreamglass","Green Aurora","Afterglow","Neon Highway","Midnight Arcade","Chrome Horizon","Cassette Sunset","Night Drive","Digital Hearts"};
-    return names[juce::jlimit(0,11,i)];
-}
-void AstrophiluxNebulaAudioProcessor::loadPreset(int i)
-{
-    struct V{float a,d,s,r,t,dr,e,sp,m;}; static const V v[]={
-        {.02f,1.1f,.82f,1.8f,9000,.18f,.12f,.24f,.80f},
-        {.55f,2.4f,.72f,5.8f,4300,.42f,.25f,.62f,.78f},
-        {.18f,1.8f,.88f,3.7f,6900,.28f,.08f,.48f,.80f},
-        {.03f,.75f,.66f,2.8f,11800,.12f,.31f,.40f,.76f},
-        {1.25f,3.2f,.76f,7.4f,3600,.55f,.18f,.70f,.78f},
-        {.08f,1.25f,.58f,4.5f,7600,.34f,.36f,.58f,.77f},
-        {.015f,.45f,.72f,1.5f,12500,.10f,.22f,.28f,.80f},
-        {.005f,.28f,.64f,.75f,9800,.06f,.14f,.18f,.82f},
-        {.09f,.90f,.80f,2.9f,6200,.26f,.30f,.52f,.78f},
-        {.32f,1.8f,.70f,4.8f,5100,.38f,.18f,.64f,.76f},
-        {.012f,.62f,.74f,1.9f,11200,.16f,.34f,.38f,.80f},
-        {.06f,1.4f,.86f,3.6f,7400,.30f,.26f,.56f,.78f}};
-    i=juce::jlimit(0,11,i); currentPreset=i; const auto& x=v[i];
-    const char* ids[]={IDs::attack,IDs::decay,IDs::sustain,IDs::release,IDs::tone,IDs::drift,IDs::echo,IDs::space,IDs::master}; float vals[]={x.a,x.d,x.s,x.r,x.t,x.dr,x.e,x.sp,x.m};
-    for(int k=0;k<9;++k) if(auto* p=state.getParameter(ids[k])) p->setValueNotifyingHost(p->convertTo0to1(vals[k]));
-}
-void AstrophiluxNebulaAudioProcessor::getStateInformation(juce::MemoryBlock& d){if(auto xml=state.copyState().createXml()) copyXmlToBinary(*xml,d);}
-void AstrophiluxNebulaAudioProcessor::setStateInformation(const void* d,int n){if(auto xml=getXmlFromBinary(d,n))if(xml->hasTagName(state.state.getType()))state.replaceState(juce::ValueTree::fromXml(*xml));}
-juce::AudioProcessorEditor* AstrophiluxNebulaAudioProcessor::createEditor(){return new AstrophiluxNebulaAudioProcessorEditor(*this);}
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new AstrophiluxNebulaAudioProcessor();}
+namespace IDs{constexpr auto attack="attack";constexpr auto decay="decay";constexpr auto sustain="sustain";constexpr auto release="release";constexpr auto tone="tone";constexpr auto drift="drift";constexpr auto echo="echo";constexpr auto space="space";constexpr auto master="master";constexpr auto waveA="waveA";constexpr auto waveB="waveB";constexpr auto oscMix="oscMix";constexpr auto detune="detune";constexpr auto drive="drive";}
+AstrophiluxNebulaAudioProcessor::AstrophiluxNebulaAudioProcessor():AudioProcessor(BusesProperties().withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,nullptr,"NEBULA_STATE",createLayout()){for(int i=0;i<16;++i)synth.addVoice(new AstroVoice());synth.addSound(new AstroSound());}
+juce::AudioProcessorValueTreeState::ParameterLayout AstrophiluxNebulaAudioProcessor::createLayout(){using P=juce::AudioParameterFloat;using C=juce::AudioParameterChoice;std::vector<std::unique_ptr<juce::RangedAudioParameter>>p;
+p.push_back(std::make_unique<P>(IDs::attack,"Attack",juce::NormalisableRange<float>(.001f,4.f,.001f,.35f),.02f));p.push_back(std::make_unique<P>(IDs::decay,"Decay",juce::NormalisableRange<float>(.01f,8.f,.001f,.35f),1.1f));p.push_back(std::make_unique<P>(IDs::sustain,"Sustain",0.f,1.f,.82f));p.push_back(std::make_unique<P>(IDs::release,"Release",juce::NormalisableRange<float>(.02f,12.f,.001f,.35f),1.8f));p.push_back(std::make_unique<P>(IDs::tone,"Tone",juce::NormalisableRange<float>(80.f,20000.f,1.f,.25f),9000.f));p.push_back(std::make_unique<P>(IDs::drift,"Drift",0.f,1.f,.18f));p.push_back(std::make_unique<P>(IDs::echo,"Echo",0.f,1.f,.12f));p.push_back(std::make_unique<P>(IDs::space,"Space",0.f,1.f,.24f));p.push_back(std::make_unique<P>(IDs::master,"Master",0.f,1.25f,.8f));
+p.push_back(std::make_unique<C>(IDs::waveA,"Osc A Wave",juce::StringArray{"Saw","Square","Triangle","Sine"},0));p.push_back(std::make_unique<C>(IDs::waveB,"Osc B Wave",juce::StringArray{"Saw","Square","Triangle","Sine"},2));p.push_back(std::make_unique<P>(IDs::oscMix,"Osc Mix",0.f,1.f,.42f));p.push_back(std::make_unique<P>(IDs::detune,"Detune",-35.f,35.f,7.f));p.push_back(std::make_unique<P>(IDs::drive,"Analog Drive",0.f,1.f,.12f));return{p.begin(),p.end()};}
+bool AstrophiluxNebulaAudioProcessor::isBusesLayoutSupported(const BusesLayout&l)const{return l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
+void AstrophiluxNebulaAudioProcessor::prepareToPlay(double sr,int block){sampleRate=sr;synth.setCurrentPlaybackSampleRate(sr);keyboardState.reset();juce::dsp::ProcessSpec spec{sr,(juce::uint32)block,2};filter.prepare(spec);filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);chorus.prepare(spec);reverb.prepare(spec);delay.prepare(spec);chorus.setRate(.18f);chorus.setDepth(.22f);chorus.setCentreDelay(7.f);chorus.setFeedback(.08f);}
+void AstrophiluxNebulaAudioProcessor::updateVoices(){juce::ADSR::Parameters p;p.attack=*state.getRawParameterValue(IDs::attack);p.decay=*state.getRawParameterValue(IDs::decay);p.sustain=*state.getRawParameterValue(IDs::sustain);p.release=*state.getRawParameterValue(IDs::release);int a=(int)*state.getRawParameterValue(IDs::waveA),b=(int)*state.getRawParameterValue(IDs::waveB);float mx=*state.getRawParameterValue(IDs::oscMix),dt=*state.getRawParameterValue(IDs::detune),drv=*state.getRawParameterValue(IDs::drive),mov=*state.getRawParameterValue(IDs::drift);for(int i=0;i<synth.getNumVoices();++i)if(auto*v=dynamic_cast<AstroVoice*>(synth.getVoice(i))){v->setEnvelope(p);v->setTimbre(a,b,mx,dt,drv,mov);}}
+void AstrophiluxNebulaAudioProcessor::processBlock(juce::AudioBuffer<float>&b,juce::MidiBuffer&midi){juce::ScopedNoDenormals n;b.clear();updateVoices();keyboardState.processNextMidiBuffer(midi,0,b.getNumSamples(),true);synth.renderNextBlock(b,midi,0,b.getNumSamples());juce::dsp::AudioBlock<float>block(b);juce::dsp::ProcessContextReplacing<float>ctx(block);filter.setCutoffFrequency(*state.getRawParameterValue(IDs::tone));filter.process(ctx);chorus.setMix(juce::jlimit(0.f,.65f,*state.getRawParameterValue(IDs::drift)*.65f));chorus.process(ctx);float ea=*state.getRawParameterValue(IDs::echo),ds=(float)(sampleRate*.375);for(int s=0;s<b.getNumSamples();++s)for(int ch=0;ch<b.getNumChannels();++ch){float dry=b.getSample(ch,s),d=delay.popSample(ch,ds);delay.pushSample(ch,dry+d*.28f);b.setSample(ch,s,dry+d*ea);}juce::dsp::Reverb::Parameters rp;rp.roomSize=.72f;rp.damping=.58f;rp.wetLevel=*state.getRawParameterValue(IDs::space);rp.dryLevel=1.f-rp.wetLevel*.35f;reverb.setParameters(rp);reverb.process(ctx);b.applyGain(*state.getRawParameterValue(IDs::master));}
+const juce::String AstrophiluxNebulaAudioProcessor::getProgramName(int i){static const char*names[]={"Starlight Bloom","Infinity Choir","Pixel Memory","Glass Comet","Aurora Lift","Afterglow","Neon Highway","Midnight Arcade","Chrome Horizon","Cassette Sunset","Night Drive","Digital Hearts"};return names[juce::jlimit(0,11,i)];}
+void AstrophiluxNebulaAudioProcessor::loadPreset(int i){struct V{float a,d,s,r,t,dr,e,sp,m,mix,dt,drv;int wa,wb;};static const V v[]={
+{.65f,2.2f,.84f,6.8f,5200,.46f,.18f,.70f,.76f,.48f,11,.16f,0,2},{1.6f,3.5f,.90f,9.2f,3400,.62f,.12f,.82f,.72f,.56f,-9,.10f,3,2},{.008f,.35f,.55f,1.2f,10500,.12f,.28f,.24f,.80f,.28f,7,.20f,1,2},{.04f,1.1f,.72f,4.2f,13800,.20f,.38f,.56f,.75f,.66f,14,.08f,2,3},{.38f,1.8f,.78f,5.6f,6100,.55f,.16f,.68f,.76f,.50f,-12,.18f,0,3},{.12f,2.6f,.68f,7.5f,4300,.38f,.42f,.76f,.72f,.62f,5,.24f,2,0},
+{.006f,.22f,.62f,.85f,12800,.09f,.16f,.22f,.82f,.38f,8,.34f,0,1},{.002f,.18f,.48f,.42f,8600,.06f,.10f,.14f,.84f,.22f,-7,.28f,1,3},{.07f,.72f,.76f,2.7f,7200,.28f,.30f,.48f,.78f,.54f,17,.38f,0,2},{.28f,1.7f,.74f,5.2f,3900,.58f,.24f,.72f,.72f,.60f,-14,.22f,2,0},{.004f,.25f,.58f,.55f,2600,.12f,.08f,.18f,.88f,.34f,-5,.46f,1,0},{.85f,2.8f,.88f,8.4f,5700,.50f,.36f,.84f,.70f,.52f,12,.14f,3,0}};
+i=juce::jlimit(0,11,i);currentPreset=i;const auto&x=v[i];const char*ids[]={IDs::attack,IDs::decay,IDs::sustain,IDs::release,IDs::tone,IDs::drift,IDs::echo,IDs::space,IDs::master,IDs::oscMix,IDs::detune,IDs::drive,IDs::waveA,IDs::waveB};float vals[]={x.a,x.d,x.s,x.r,x.t,x.dr,x.e,x.sp,x.m,x.mix,x.dt,x.drv,(float)x.wa,(float)x.wb};for(int k=0;k<14;++k)if(auto*p=state.getParameter(ids[k]))p->setValueNotifyingHost(p->convertTo0to1(vals[k]));}
+void AstrophiluxNebulaAudioProcessor::getStateInformation(juce::MemoryBlock&d){if(auto xml=state.copyState().createXml())copyXmlToBinary(*xml,d);}void AstrophiluxNebulaAudioProcessor::setStateInformation(const void*d,int n){if(auto xml=getXmlFromBinary(d,n))if(xml->hasTagName(state.state.getType()))state.replaceState(juce::ValueTree::fromXml(*xml));}juce::AudioProcessorEditor*AstrophiluxNebulaAudioProcessor::createEditor(){return new AstrophiluxNebulaAudioProcessorEditor(*this);}juce::AudioProcessor*JUCE_CALLTYPE createPluginFilter(){return new AstrophiluxNebulaAudioProcessor();}
