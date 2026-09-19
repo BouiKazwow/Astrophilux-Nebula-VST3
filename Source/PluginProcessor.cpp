@@ -24,7 +24,7 @@ AstrophiluxNebulaAudioProcessor::AstrophiluxNebulaAudioProcessor()
       state(*this, nullptr, "NEBULA_STATE", createLayout())
 {
     for (int i = 0; i < 16; ++i)
-        synth.addVoice(new juce::SamplerVoice());
+        synth.addVoice(new NebulaSamplerVoice());
 
     juce::WavAudioFormat wav;
 
@@ -41,8 +41,8 @@ AstrophiluxNebulaAudioProcessor::AstrophiluxNebulaAudioProcessor()
         playableRange.setRange(24, 61, true);
 
         synth.addSound(
-            new juce::SamplerSound(
-                "Infinity",
+            new NebulaSamplerSound(
+                "Synth Pad 3",
                 *reader,
                 playableRange,
                 48,
@@ -178,9 +178,14 @@ void AstrophiluxNebulaAudioProcessor::prepareToPlay(
 
 void AstrophiluxNebulaAudioProcessor::updateEnvelope()
 {
-    // JUCE's standard SamplerVoice uses the attack and release values
-    // supplied to SamplerSound. Live ADSR modulation will use a custom
-    // sampler voice in a future version.
+    juce::ADSR::Parameters p;
+    p.attack  = *state.getRawParameterValue(IDs::attack);
+    p.decay   = *state.getRawParameterValue(IDs::decay);
+    p.sustain = *state.getRawParameterValue(IDs::sustain);
+    p.release = *state.getRawParameterValue(IDs::release);
+    for (int i = 0; i < synth.getNumVoices(); ++i)
+        if (auto* voice = dynamic_cast<NebulaSamplerVoice*>(synth.getVoice(i)))
+            voice->setEnvelopeParameters(p);
 }
 
 void AstrophiluxNebulaAudioProcessor::processBlock(
@@ -190,6 +195,7 @@ void AstrophiluxNebulaAudioProcessor::processBlock(
     juce::ScopedNoDenormals noDenormals;
 
     buffer.clear();
+    updateEnvelope();
 
     synth.renderNextBlock(
         buffer,
