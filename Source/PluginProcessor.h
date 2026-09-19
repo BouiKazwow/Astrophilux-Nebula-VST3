@@ -37,7 +37,7 @@ public:
     const juce::String getName() const override { return JucePlugin_Name; }
     bool acceptsMidi() const override { return true; } bool producesMidi() const override { return false; } bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 12.0; }
-    int getNumPrograms() override { return 6; } int getCurrentProgram() override { return currentPreset; }
+    int getNumPrograms() override { return 12; } int getCurrentProgram() override { return currentPreset; }
     void setCurrentProgram(int i) override { loadPreset(i); } const juce::String getProgramName(int i) override; void changeProgramName(int,const juce::String&) override {}
     void getStateInformation(juce::MemoryBlock&) override; void setStateInformation(const void*,int) override;
     juce::AudioProcessorValueTreeState state;
