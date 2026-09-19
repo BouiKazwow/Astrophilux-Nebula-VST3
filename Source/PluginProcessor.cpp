@@ -38,14 +38,14 @@ AstrophiluxNebulaAudioProcessor::AstrophiluxNebulaAudioProcessor()
             wav.createReaderFor(stream, true)))
     {
         juce::BigInteger playableRange;
-        playableRange.setRange(24, 61, true);
+        playableRange.setRange(0, 128, true);
 
         synth.addSound(
             new NebulaSamplerSound(
                 "Synth Pad 3",
                 *reader,
                 playableRange,
-                48,
+                60,
                 0.02,
                 1.8,
                 8.0
