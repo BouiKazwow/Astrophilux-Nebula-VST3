@@ -52,8 +52,8 @@ void AstrophiluxNebulaAudioProcessor::processBlock(juce::AudioBuffer<float>& b,j
 }
 const juce::String AstrophiluxNebulaAudioProcessor::getProgramName(int i)
 {
-    static const char* names[]={"Synth Pad 3","Infinite Haze","Soft Orbit","Dreamglass","Green Aurora","Afterglow"};
-    return names[juce::jlimit(0,5,i)];
+    static const char* names[]={"Synth Pad 3","Infinite Haze","Soft Orbit","Dreamglass","Green Aurora","Afterglow","Neon Highway","Midnight Arcade","Chrome Horizon","Cassette Sunset","Night Drive","Digital Hearts"};
+    return names[juce::jlimit(0,11,i)];
 }
 void AstrophiluxNebulaAudioProcessor::loadPreset(int i)
 {
@@ -63,8 +63,14 @@ void AstrophiluxNebulaAudioProcessor::loadPreset(int i)
         {.18f,1.8f,.88f,3.7f,6900,.28f,.08f,.48f,.80f},
         {.03f,.75f,.66f,2.8f,11800,.12f,.31f,.40f,.76f},
         {1.25f,3.2f,.76f,7.4f,3600,.55f,.18f,.70f,.78f},
-        {.08f,1.25f,.58f,4.5f,7600,.34f,.36f,.58f,.77f}};
-    i=juce::jlimit(0,5,i); currentPreset=i; const auto& x=v[i];
+        {.08f,1.25f,.58f,4.5f,7600,.34f,.36f,.58f,.77f},
+        {.015f,.45f,.72f,1.5f,12500,.10f,.22f,.28f,.80f},
+        {.005f,.28f,.64f,.75f,9800,.06f,.14f,.18f,.82f},
+        {.09f,.90f,.80f,2.9f,6200,.26f,.30f,.52f,.78f},
+        {.32f,1.8f,.70f,4.8f,5100,.38f,.18f,.64f,.76f},
+        {.012f,.62f,.74f,1.9f,11200,.16f,.34f,.38f,.80f},
+        {.06f,1.4f,.86f,3.6f,7400,.30f,.26f,.56f,.78f}};
+    i=juce::jlimit(0,11,i); currentPreset=i; const auto& x=v[i];
     const char* ids[]={IDs::attack,IDs::decay,IDs::sustain,IDs::release,IDs::tone,IDs::drift,IDs::echo,IDs::space,IDs::master}; float vals[]={x.a,x.d,x.s,x.r,x.t,x.dr,x.e,x.sp,x.m};
     for(int k=0;k<9;++k) if(auto* p=state.getParameter(ids[k])) p->setValueNotifyingHost(p->convertTo0to1(vals[k]));
 }
