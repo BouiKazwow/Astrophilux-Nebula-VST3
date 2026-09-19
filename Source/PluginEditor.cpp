@@ -6,7 +6,7 @@ static const auto bg=juce::Colour(0xff03151b), panel=juce::Colour(0xff06252c), c
 void NebulaLookAndFeel::drawRotarySlider(juce::Graphics& g,int x,int y,int w,int h,float pos,float start,float end,juce::Slider&)
 {
     auto r=juce::Rectangle<float>((float)x,(float)y,(float)w,(float)h).reduced(8);
-    auto radius=juce::jmin(r.getWidth(),r.getHeight())*.5f, c=r.getCentre();
+    const float radius=juce::jmin(r.getWidth(),r.getHeight())*.5f; const juce::Point<float> c=r.getCentre();
     g.setColour(juce::Colour(0xff020b10)); g.fillEllipse(r);
     g.setColour(juce::Colour(0xff174b58)); g.drawEllipse(r,2);
     juce::Path arc; arc.addCentredArc(c.x,c.y,radius-2,radius-2,0,start,start+pos*(end-start),true);
@@ -59,7 +59,7 @@ void AstrophiluxNebulaAudioProcessorEditor::paint(juce::Graphics& g)
     const char* cats[]={"★  Favorites","▣  Synth Pads","    Synth Pad 3","    Infinite Haze","    Soft Orbit","▣  Keys","▣  Plucks","▣  Bass","▣  Textures","▣  Ambient","▣  User"};
     for(int i=0;i<11;i++){ int y=230+i*36; if(i==2){g.setColour(juce::Colour(0xff08758a));g.fillRect(20,y-4,200,32);} g.setColour(i==2?juce::Colours::white:juce::Colour(0xffd1edf0));g.drawText(cats[i],32,y,180,24,juce::Justification::centredLeft); }
     auto main=juce::Rectangle<float>((float)side+20,(float)top,(float)W-side-30,(float)H-top-bottom-10);
-    g.setColour(juce::Colour(0xffbfeff0));g.setFont(13.f);g.drawText("SYNTH        MODULATION        EFFECTS        ARP & SEQ        GLOBAL",(int)main.getX()+15,top,(int)main.getWidth()-30,34,juce::Justification::centredLeft);g.setColour(cyan);g.fillRect(main.getX()+10,top+32,130.f,2.f);
+    g.setColour(juce::Colour(0xffbfeff0));g.setFont(13.f);g.drawText("SYNTH        MODULATION        EFFECTS        ARP & SEQ        GLOBAL",(int)main.getX()+15,top,(int)main.getWidth()-30,34,juce::Justification::centredLeft);g.setColour(cyan);g.fillRect(juce::Rectangle<float>(main.getX()+10.0f,(float)top+32.0f,130.0f,2.0f));
     float y=top+45, half=(main.getWidth()-10)/2; auto oscA=juce::Rectangle<float>(main.getX(),y,half,205),oscB=juce::Rectangle<float>(main.getX()+half+10,y,half,205); drawPanel(g,oscA,"⏻  OSCILLATOR A",cyan);drawPanel(g,oscB,"⏻  OSCILLATOR B",blue);
     drawWave(g,oscA.reduced(15).withTrimmedTop(30).withTrimmedBottom(65),cyan,0);drawWave(g,oscB.reduced(15).withTrimmedTop(30).withTrimmedBottom(65),blue,1.1f);
     auto env=juce::Rectangle<float>(main.getX(),y+215,main.getWidth()*.61f,190), fil=juce::Rectangle<float>(env.getRight()+10,y+215,main.getRight()-env.getRight()-10,190);drawPanel(g,env,"AMP ENVELOPE",cyan);drawPanel(g,fil,"⏻  FILTER  •  LOWPASS 24",blue);
