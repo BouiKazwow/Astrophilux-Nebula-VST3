@@ -64,7 +64,7 @@ private:
                 float phL=rng.nextFloat()*juce::MathConstants<float>::twoPi,phR=rng.nextFloat()*juce::MathConstants<float>::twoPi;
                 specL[(size_t)2*bin]+=mag*std::cos(phL);specL[(size_t)2*bin+1]+=mag*std::sin(phL);specR[(size_t)2*bin]+=mag*std::cos(phR);specR[(size_t)2*bin+1]+=mag*std::sin(phR);}
         }
-        juce::dsp::FFT fft(padOrder);fft.perform(specL.data(),specL.data(),true);fft.perform(specR.data(),specR.data(),true);
+        juce::dsp::FFT fft(padOrder);fft.performRealOnlyInverseTransform(specL.data());fft.performRealOnlyInverseTransform(specR.data());
         float peak=.0001f;for(int i=0;i<padTableSize;++i){padTableL[(size_t)i]=specL[(size_t)2*i];padTableR[(size_t)i]=specR[(size_t)2*i];peak=juce::jmax(peak,std::abs(padTableL[(size_t)i]),std::abs(padTableR[(size_t)i]));}
         const float g=.78f/peak;for(int i=0;i<padTableSize;++i){padTableL[(size_t)i]*=g;padTableR[(size_t)i]*=g;}padReadPos=0.f;
     }
