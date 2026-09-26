@@ -14,12 +14,30 @@ AstrophiluxNebulaAudioProcessorEditor::AstrophiluxNebulaAudioProcessorEditor(Ast
     for(size_t i=0;i<knobs.size();++i){auto& k=knobs[i];k.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);k.setTextBoxStyle(juce::Slider::TextBoxBelow,false,70,18);k.setLookAndFeel(&look);k.setColour(juce::Slider::textBoxTextColourId,juce::Colour(0xffd8ffff));k.setColour(juce::Slider::textBoxBackgroundColourId,juce::Colour(0xff03171c));addAndMakeVisible(k);labels[i].setText(names[i],juce::dontSendNotification);labels[i].setJustificationType(juce::Justification::centred);labels[i].setColour(juce::Label::textColourId,juce::Colour(0xffd9ffff));labels[i].setFont(10.f);addAndMakeVisible(labels[i]);attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state,ids[i],k));}
     for(auto* box:{&waveABox,&waveBBox}){box->addItem("Saw",1);box->addItem("Square",2);box->addItem("Triangle",3);box->addItem("Sine",4);addAndMakeVisible(*box);}waveAAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state,"waveA",waveABox);waveBAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state,"waveB",waveBBox);
     presetBox.addSectionHeading("SYNTH PADS");for(int i=0;i<6;++i)presetBox.addItem(processor.getProgramName(i),i+1);presetBox.addSeparator();presetBox.addSectionHeading("SYNTHWAVE");for(int i=6;i<12;++i)presetBox.addItem(processor.getProgramName(i),i+1);presetBox.setSelectedId(processor.getPresetIndex()+1,juce::dontSendNotification);presetBox.onChange=[this]{processor.loadPreset(presetBox.getSelectedId()-1);};addAndMakeVisible(presetBox);
-    auto movePreset=[this](int d){int i=(presetBox.getSelectedId()-1+d+12)%12;presetBox.setSelectedId(i+1,juce::sendNotification);};previous.onClick=[movePreset]{movePreset(-1);};next.onClick=[movePreset]{movePreset(1);};addAndMakeVisible(previous);addAndMakeVisible(next);
+    auto movePreset=[this](int d){int i=(presetBox.getSelectedId()-1+d+12)%12;presetBox.setSelectedId(i+1,juce::sendNotification);};previous.onClick=[movePreset]{movePreset(-1);};next.onClick=[movePreset]{movePreset(1);};addAndMakeVisible(previous);addAndMakeVisible(next);updateButton.onClick=[this]{checkForUpdates();};addAndMakeVisible(updateButton);
     keyboard.setAvailableRange(24,96);keyboard.setKeyWidth(22.f);keyboard.setScrollButtonsVisible(false);keyboard.setColour(juce::MidiKeyboardComponent::whiteNoteColourId,juce::Colour(0xffe9ffff));keyboard.setColour(juce::MidiKeyboardComponent::blackNoteColourId,juce::Colour(0xff031116));keyboard.setColour(juce::MidiKeyboardComponent::keyDownOverlayColourId,cyan);addAndMakeVisible(keyboard);
     setResizable(true,true);setResizeLimits(1000,650,1600,1000);setSize(1400,860);startTimerHz(30);
 }
 AstrophiluxNebulaAudioProcessorEditor::~AstrophiluxNebulaAudioProcessorEditor(){for(auto& k:knobs)k.setLookAndFeel(nullptr);}
 void AstrophiluxNebulaAudioProcessorEditor::timerCallback(){animation+=.025f;if(animation>juce::MathConstants<float>::twoPi)animation=0;repaint();}
+void AstrophiluxNebulaAudioProcessorEditor::checkForUpdates()
+{
+    const juce::String currentVersion = JucePlugin_VersionString;
+    juce::URL api("https://api.github.com/repos/BouiKazwow/Astrophilux-Nebula-VST3/releases/latest");
+    juce::StringPairArray headers; headers.set("Accept","application/vnd.github+json"); headers.set("User-Agent","Astrophilux-Nebula/"+currentVersion);
+    auto options=juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress).withExtraHeaders("Accept: application/vnd.github+json\r\nUser-Agent: Astrophilux-Nebula/"+currentVersion+"\r\n").withConnectionTimeoutMs(5000);
+    auto stream=api.createInputStream(options);
+    if(!stream){juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,"Nebula Updater","Could not reach the update server.");return;}
+    auto json=juce::JSON::parse(stream->readEntireStreamAsString());
+    auto* obj=json.getDynamicObject(); if(!obj){juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,"Nebula Updater","Update information was invalid.");return;}
+    auto tag=obj->getProperty("tag_name").toString().trimCharactersAtStart("vV");
+    auto page=obj->getProperty("html_url").toString();
+    auto parse=[](juce::String s){juce::StringArray p;p.addTokens(s,".","");int n=0,m=0,k=0;if(p.size()>0)n=p[0].getIntValue();if(p.size()>1)m=p[1].getIntValue();if(p.size()>2)k=p[2].getIntValue();return n*1000000+m*1000+k;};
+    if(parse(tag)>parse(currentVersion)){
+        auto result=juce::AlertWindow::showYesNoCancelBox(juce::MessageBoxIconType::InfoIcon,"Nebula Update Available","Nebula v"+tag+" is available.\n\nOpen the installer/download page?\n\nYou do NOT need to delete the old VST3 first; the installer replaces it.", "OPEN UPDATE","LATER",{},nullptr,nullptr);
+        if(result==1 && page.isNotEmpty())juce::URL(page).launchInDefaultBrowser();
+    }else juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon,"Nebula Updater","You're up to date — Nebula v"+currentVersion+".");
+}
 void AstrophiluxNebulaAudioProcessorEditor::drawPanel(juce::Graphics& g,juce::Rectangle<float> r,const juce::String& t,juce::Colour a){g.setColour(panel.withAlpha(.96f));g.fillRoundedRectangle(r,10);g.setColour(a.withAlpha(.45f));g.drawRoundedRectangle(r,10,1.2f);g.setColour(a);g.setFont(juce::FontOptions(12.f,juce::Font::bold));g.drawText(t,r.toNearestInt().reduced(14).removeFromTop(24),juce::Justification::centredLeft);}
 void AstrophiluxNebulaAudioProcessorEditor::drawWave(juce::Graphics& g,juce::Rectangle<float> r,juce::Colour c,float ph){g.setColour(juce::Colour(0xff0b3b43));for(int i=1;i<8;i++)g.drawVerticalLine((int)(r.getX()+r.getWidth()*i/8),r.getY(),r.getBottom());juce::Path p;for(int x=0;x<(int)r.getWidth();++x){float t=(float)x/r.getWidth()*juce::MathConstants<float>::twoPi*2.2f;float yy=r.getCentreY()+std::sin(t+ph+animation)*r.getHeight()*.25f;if(x==0)p.startNewSubPath(r.getX()+x,yy);else p.lineTo(r.getX()+x,yy);}g.setColour(c.withAlpha(.18f));for(int i=-3;i<=3;i++){auto q=p;q.applyTransform(juce::AffineTransform::translation(0,(float)i*3));g.strokePath(q,juce::PathStrokeType(1));}g.setColour(c);g.strokePath(p,juce::PathStrokeType(2));}
 void AstrophiluxNebulaAudioProcessorEditor::paint(juce::Graphics& g)
@@ -39,7 +57,7 @@ void AstrophiluxNebulaAudioProcessorEditor::paint(juce::Graphics& g)
 }
 void AstrophiluxNebulaAudioProcessorEditor::resized()
 {
-    int W=getWidth(),H=getHeight(),side=205,top=125,bottom=150;previous.setBounds(W/2-225,43,38,40);presetBox.setBounds(W/2-180,43,360,40);next.setBounds(W/2+187,43,38,40);labels[8].setBounds(W-155,20,100,16);knobs[8].setBounds(W-150,36,90,80);
+    int W=getWidth(),H=getHeight(),side=205,top=125,bottom=150;previous.setBounds(W/2-225,43,38,40);presetBox.setBounds(W/2-180,43,360,40);next.setBounds(W/2+187,43,38,40);updateButton.setBounds(W-310,88,180,28);labels[8].setBounds(W-155,20,100,16);knobs[8].setBounds(W-150,36,90,80);
     float mainX=side+25,mw=W-side-37,y=top+8,envY=y+200,envW=mw*.62f;float half=(mw-10)/2;waveABox.setBounds((int)mainX+18,(int)y+36,145,28);waveBBox.setBounds((int)(mainX+half+10)+18,(int)y+36,145,28);auto place=[&](int i,float x,float yy,float w=78.f){labels[(size_t)i].setBounds((int)x,(int)yy-14,(int)w,14);knobs[(size_t)i].setBounds((int)x,(int)yy,(int)w,82);};for(int i=0;i<4;i++)place(i,mainX+28+i*(envW-90)/3,envY+102);place(9,mainX+half-205,y+92);place(10,mainX+half+35,y+92);place(11,mainX+mw-120,y+92);place(4,mainX+envW+85,envY+102);float fxY=y+400,fw=(mw-20)/3;place(5,mainX+fw*.5f-38,fxY+25);place(6,mainX+fw+10+fw*.5f-38,fxY+25);place(7,mainX+2*(fw+10)+fw*.5f-38,fxY+25);
     keyboard.setBounds(20,H-bottom+18,W-40,105);
 }
