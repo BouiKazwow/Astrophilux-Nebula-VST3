@@ -12,7 +12,10 @@ public:
     bool canPlaySound(juce::SynthesiserSound* s) override { return dynamic_cast<AstroSound*>(s)!=nullptr; }
     void setEnvelope(const juce::ADSR::Parameters& p){envParams=p; env.setParameters(p);}
     void setTimbre(int a,int b,float mx,float dt,float drv,float motion){waveA=a;waveB=b;mix=mx;detune=dt;drive=drv;movement=motion;}
-    void startNote(int note,float velocity,juce::SynthesiserSound*,int) override { level=velocity; baseHz=(float)juce::MidiMessage::getMidiNoteInHertz(note); phaseA=phaseB=0; driftPhase=0; env.setSampleRate(getSampleRate());env.setParameters(envParams);env.reset();env.noteOn();}
+    void setPadSynthMode(bool shouldUse){padSynthMode=shouldUse;}
+    void startNote(int note,float velocity,juce::SynthesiserSound*,int) override { level=velocity; baseHz=(float)juce::MidiMessage::getMidiNoteInHertz(note); phaseA=phaseB=0; driftPhase=0;
+        for(size_t i=0;i<padPhase.size();++i){padPhase[i]=std::fmod(0.61803398875f*(float)(i+1),1.0f);}
+        env.setSampleRate(getSampleRate());env.setParameters(envParams);env.reset();env.noteOn();}
     void stopNote(float,bool tail) override {if(tail)env.noteOff();else{env.reset();clearCurrentNote();}}
     void pitchWheelMoved(int) override{} void controllerMoved(int,int) override{}
     void renderNextBlock(juce::AudioBuffer<float>& out,int start,int num) override
@@ -23,15 +26,35 @@ public:
             float wob=std::sin(driftPhase*juce::MathConstants<float>::twoPi)*movement*0.004f;
             float hzA=baseHz*(1.f+wob), hzB=baseHz*std::pow(2.f,(detune/1200.f))*(1.f-wob*.7f);
             phaseA += hzA/(float)sr; phaseB += hzB/(float)sr; phaseA-=std::floor(phaseA);phaseB-=std::floor(phaseB);
-            float a=wave(phaseA,waveA),b=wave(phaseB,waveB);float s=(a*(1.f-mix)+b*mix)*level;
-            s=std::tanh(s*(1.f+drive*5.f))*env.getNextSample()*.42f;
-            for(int ch=0;ch<out.getNumChannels();++ch)out.addSample(ch,start+i,s*(ch==0?1.f:.995f));
+            float s=0.0f, left=0.0f, right=0.0f;
+            if(padSynthMode){
+                // Spectral cloud based on the original ZynAddSubFX Synth Pad3 PADsynth patch.
+                // The .xiz uses PADsynth only, bandwidth 625, rand 64, stereo=yes.
+                static constexpr float mags[24]={1.0f,.78f,.61f,.50f,.43f,.36f,.31f,.27f,.23f,.20f,.175f,.153f,.134f,.118f,.104f,.092f,.081f,.071f,.063f,.056f,.049f,.043f,.038f,.034f};
+                for(size_t k=0;k<padPhase.size();++k){
+                    float harmonic=(float)(k+1);
+                    float spread=(float)((int)(k%7)-3)*0.00042f; // broad PADsynth-like spectral bandwidth
+                    padPhase[k]+=baseHz*harmonic*(1.0f+spread)/(float)sr;
+                    padPhase[k]-=std::floor(padPhase[k]);
+                    float v=std::sin(padPhase[k]*juce::MathConstants<float>::twoPi)*mags[k];
+                    float pan=0.5f+0.46f*std::sin((float)k*2.39996f);
+                    left+=v*std::sqrt(1.0f-pan); right+=v*std::sqrt(pan);
+                }
+                float norm=.105f*level*env.getNextSample();
+                left=std::tanh(left*norm); right=std::tanh(right*norm);
+            }else{
+                float a=wave(phaseA,waveA),b=wave(phaseB,waveB);
+                s=std::tanh((a*(1.f-mix)+b*mix)*level*(1.f+drive*5.f))*env.getNextSample()*.42f;
+                left=s; right=s*.995f;
+            }
+            if(out.getNumChannels()>0)out.addSample(0,start+i,left);
+            if(out.getNumChannels()>1)out.addSample(1,start+i,right);
         }
         if(!env.isActive())clearCurrentNote();
     }
 private:
     static float wave(float p,int w){switch(w){case 1:return p<.5f?1.f:-1.f;case 2:return 1.f-4.f*std::abs(p-.5f);case 3:return std::sin(p*juce::MathConstants<float>::twoPi);default:return 2.f*p-1.f;}}
-    juce::ADSR env;juce::ADSR::Parameters envParams{.02f,1.1f,.82f,1.8f};float phaseA=0,phaseB=0,driftPhase=0,baseHz=440,level=0,mix=.45f,detune=7,drive=.1f,movement=.1f;int waveA=0,waveB=2;
+    juce::ADSR env; std::array<float,24> padPhase{}; bool padSynthMode=false; juce::ADSR::Parameters envParams{.02f,1.1f,.82f,1.8f};float phaseA=0,phaseB=0,driftPhase=0,baseHz=440,level=0,mix=.45f,detune=7,drive=.1f,movement=.1f;int waveA=0,waveB=2;
 };
 
 class AstrophiluxNebulaAudioProcessor final : public juce::AudioProcessor
