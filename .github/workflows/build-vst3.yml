@@ -37,7 +37,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           ditto -c -k --sequesterRsrc --keepParent "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3" Astrophilux_Nebula_macOS_VST3.zip
-          pkgbuild --component "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3" --install-location "/Library/Audio/Plug-Ins/VST3" --identifier "com.astrophilux.nebula.vst3" --version "0.3.0" Astrophilux_Nebula_macOS.pkg
+          pkgbuild --component "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3" --install-location "/Library/Audio/Plug-Ins/VST3" --identifier "com.astrophilux.nebula.vst3" --version "0.6.0" Astrophilux_Nebula_macOS.pkg
 
       - name: Upload finished files
         uses: actions/upload-artifact@v4
