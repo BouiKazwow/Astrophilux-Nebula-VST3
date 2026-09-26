@@ -1,5 +1,5 @@
 #define AppName "Astrophilux Nebula"
-#define AppVersion "0.3.0"
+#define AppVersion "0.6.0"
 
 [Setup]
 AppId={{A57A0F3B-35B1-4E15-95B6-A5700B3BCA11}
