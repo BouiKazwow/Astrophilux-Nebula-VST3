@@ -20,7 +20,13 @@ jobs:
         uses: lukka/get-cmake@latest
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          fi
+        shell: bash
 
       - name: Build VST3
         run: cmake --build build --config Release --target AstrophiluxNebula_VST3
@@ -32,6 +38,19 @@ jobs:
           Compress-Archive -Path "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3" -DestinationPath Astrophilux_Nebula_Windows_VST3.zip
           choco install innosetup -y
           & "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" Installer/windows.iss
+
+      - name: Verify Mac Universal VST3
+        if: runner.os == 'macOS'
+        run: |
+          BIN="build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3/Contents/MacOS/Astrophilux Nebula"
+          echo "Checking: $BIN"
+          file "$BIN"
+          ARCHS="$(lipo -archs "$BIN")"
+          echo "Architectures: $ARCHS"
+          echo "$ARCHS" | grep -q "arm64"
+          echo "$ARCHS" | grep -q "x86_64"
+          codesign --force --deep --sign - "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3"
+          codesign --verify --deep --strict --verbose=2 "build/AstrophiluxNebula_artefacts/Release/VST3/Astrophilux Nebula.vst3"
 
       - name: Package Mac VST3
         if: runner.os == 'macOS'
